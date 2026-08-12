@@ -150,6 +150,33 @@ def run_daemon() -> None:
         conn.close()
 
 
+class Ansi:
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    RED = "\033[31m"
+    YELLOW = "\033[33m"
+    GREEN = "\033[32m"
+
+
+def use_color() -> bool:
+    return sys.stdout.isatty()
+
+
+def style(text: str, *codes: str) -> str:
+    if not use_color():
+        return text
+    return "".join(codes) + text + Ansi.RESET
+
+
+def color_for_pct(value: float) -> str:
+    if value >= 85:
+        return Ansi.RED
+    if value >= 60:
+        return Ansi.YELLOW
+    return Ansi.GREEN
+
+
 def format_duration(seconds: float) -> str:
     seconds = int(seconds)
     h, rem = divmod(seconds, 3600)
@@ -159,6 +186,18 @@ def format_duration(seconds: float) -> str:
     if m:
         return f"{m}m{s:02d}s"
     return f"{s}s"
+
+
+def format_last_seen(ts: float) -> str:
+    dt = datetime.fromtimestamp(ts)
+    days_ago = (datetime.now().date() - dt.date()).days
+    if days_ago <= 0:
+        day_str = "today"
+    elif days_ago == 1:
+        day_str = "yesterday"
+    else:
+        day_str = f"{days_ago} days ago"
+    return f"{day_str} {dt.strftime('%H:%M')}"
 
 
 def since_timestamp(days: int | None) -> float:
@@ -186,10 +225,12 @@ def report_apps(conn: sqlite3.Connection, since_ts: float) -> None:
         print("No app activity recorded in this window.")
         return
 
-    print(f"{'APP':<20} {'TIME OPEN':<10} {'SESSIONS':<9} {'LAST SEEN'}")
+    header = f"{'DURATION':<10} {'LAST SEEN':<18} {'APP':<26} {'SESSIONS'}"
+    print(style(header, Ansi.BOLD))
+    print(style("-" * len(header), Ansi.DIM))
     for name, total, sessions, last_seen in rows:
-        last_seen_str = datetime.fromtimestamp(last_seen).strftime("%Y-%m-%d %H:%M")
-        print(f"{name:<20} {format_duration(total):<10} {sessions:<9} {last_seen_str}")
+        last_seen_str = format_last_seen(last_seen)
+        print(f"{format_duration(total):<10} {last_seen_str:<18} {name:<26} {sessions}")
 
 
 def report_resources(conn: sqlite3.Connection, since_ts: float) -> None:
@@ -205,11 +246,17 @@ def report_resources(conn: sqlite3.Connection, since_ts: float) -> None:
         print("No resource samples recorded in this window.")
         return
 
-    print(f"Samples: {count}")
-    print(f"CPU:  avg {avg_cpu:.1f}%  max {max_cpu:.1f}%")
-    print(f"Mem:  avg {avg_mem:.1f}%  max {max_mem:.1f}%")
+    print(style(f"Samples: {count}", Ansi.DIM))
+
+    def line(label: str, avg: float, mx: float, unit: str) -> None:
+        avg_str = style(f"{avg:.1f}{unit}", color_for_pct(avg))
+        max_str = style(f"{mx:.1f}{unit}", color_for_pct(mx))
+        print(f"{style(f'{label:<5}', Ansi.BOLD)} avg {avg_str}  max {max_str}")
+
+    line("CPU:", avg_cpu, max_cpu, "%")
+    line("Mem:", avg_mem, max_mem, "%")
     if avg_temp is not None:
-        print(f"Temp: avg {avg_temp:.1f}C  max {max_temp:.1f}C")
+        line("Temp:", avg_temp, max_temp, "C")
 
 
 def main() -> None:
