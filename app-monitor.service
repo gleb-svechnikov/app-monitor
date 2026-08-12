@@ -2,7 +2,7 @@
 Description=App usage & resource monitor
 
 [Service]
-ExecStart=/usr/bin/python3 /home/pi/Scratch/app-monitor/monitor.py run
+ExecStart=/usr/bin/python3 /home/pi/Code/app-monitor/monitor.py run
 Restart=on-failure
 
 [Install]
