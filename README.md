@@ -33,9 +33,13 @@ loginctl enable-linger pi
 
 ## Notes
 
-- Only processes owned by the current user are tracked, minus a denylist of
-  known background/system processes (see `DENYLIST_PREFIXES` in
-  `monitor.py`). If a new background process shows up in reports that
-  shouldn't be there, add it to that list.
-- Detection is process-name based, not window based — this compositor
-  (Wayfire) doesn't expose window info to `wmctrl`/`xdotool`.
+- Detection is process-based, not window-based — this compositor (Wayfire)
+  doesn't expose window info to `wmctrl`/`xdotool`. A process only counts as
+  a tracked "app" if it (a) has no controlling terminal — this is what
+  separates a real GUI app (or a command run from the desktop) from a
+  command someone typed into a terminal, which inherits that terminal's tty
+  — and (b) isn't in the `DENYLIST_PREFIXES` list of known background
+  daemons / CLI utilities in `monitor.py`.
+- This is a heuristic, not exact: an unusual background daemon with no tty
+  and an unfamiliar name could show up in a report. If that happens, add its
+  name to `DENYLIST_PREFIXES`.

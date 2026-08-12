@@ -32,10 +32,21 @@ DENYLIST_PREFIXES = (
     "menu-cached", "pipewire", "polkit-mate-aut", "wayfire", "wf-panel-pi",
     "wfrespawn", "wireplumber", "xdg-", "xsel", "xsettingsd", "Xwayland",
     "systemd", "(sd-pam)", "ssh-agent", "bash", "sh", "python3", "ps",
+    "fusermount", "dconf-service", "sleep", "timeout", "sudo", "date",
+    "echo", "cat", "grep", "awk", "sed", "find", "git", "node", "claude",
+    "pkill", "kill", "nohup", "env", "which", "uname", "ls", "printf",
+    "sort", "cron", "at",
 )
 
 
-def is_tracked_app(name: str, cmdline: list[str]) -> bool:
+def is_tracked_app(name: str, cmdline: list[str], terminal: str | None) -> bool:
+    # Anything run from a shell (a command typed in lxterminal, or this
+    # daemon's own tooling) inherits a controlling tty. Real GUI apps and
+    # background daemons alike are launched detached, with no tty -- so this
+    # is what actually separates "an app the user opened" from "a command
+    # someone ran", which a name-based list alone can't do.
+    if terminal is not None:
+        return False
     if any(name.startswith(prefix) for prefix in DENYLIST_PREFIXES):
         return False
     if name == "pcmanfm" and "--desktop" in cmdline:
@@ -87,13 +98,13 @@ def read_temp() -> float | None:
 def poll_processes(username: str) -> dict[str, int]:
     """Return {app_name: pid} for currently tracked apps (one pid per name)."""
     apps: dict[str, int] = {}
-    for proc in psutil.process_iter(["pid", "name", "username", "cmdline"]):
+    for proc in psutil.process_iter(["pid", "name", "username", "cmdline", "terminal"]):
         info = proc.info
         if info.get("username") != username:
             continue
         name = info.get("name") or ""
         cmdline = info.get("cmdline") or []
-        if is_tracked_app(name, cmdline):
+        if is_tracked_app(name, cmdline, info.get("terminal")):
             apps[name] = info["pid"]
     return apps
 
@@ -158,16 +169,17 @@ def since_timestamp(days: int | None) -> float:
 
 
 def report_apps(conn: sqlite3.Connection, since_ts: float) -> None:
+    now = time.time()
     rows = conn.execute(
         """SELECT name,
-                  SUM(COALESCE(end_ts, strftime('%s','now')) - start_ts) AS total,
+                  SUM(COALESCE(end_ts, ?) - start_ts) AS total,
                   COUNT(*) AS sessions,
-                  MAX(COALESCE(end_ts, strftime('%s','now'))) AS last_seen
+                  MAX(COALESCE(end_ts, ?)) AS last_seen
            FROM app_sessions
            WHERE start_ts >= ?
            GROUP BY name
            ORDER BY total DESC""",
-        (since_ts,),
+        (now, now, since_ts),
     ).fetchall()
 
     if not rows:
