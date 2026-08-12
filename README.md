@@ -7,12 +7,23 @@ dependencies beyond `psutil` (already installed system-wide on this Pi) and
 the Python standard library.
 
 ## Run it manually
+### Foreground daemon, Ctrl-C to stop
+```bash
+python3 monitor.py run
+```
+### Today's app usage
+```bash
+python3 monitor.py report
+```
+### last 7 days
 
 ```bash
-python3 monitor.py run        # foreground daemon, Ctrl-C to stop
-python3 monitor.py report                 # today's app usage
-python3 monitor.py report --since 7        # last 7 days
-python3 monitor.py report --resources       # CPU/mem/temp stats instead
+python3 monitor.py report --since 7      
+```
+### CPU/mem/temp stats instead
+
+```bash
+python3 monitor.py report --resources       
 ```
 
 ## Run it automatically at login
